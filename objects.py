@@ -243,28 +243,35 @@ class DAMInput(BaseModel):
             f"Geen karakteristieke punten gevonden voor surfaceline '{location_id}'"
         )
 
+    def get_soilprofile(self, id: str) -> Optional[SoilProfile]:
+        for sp in self.soilprofiles:
+            if sp.id == id:
+                return sp
+
+        raise ValueError(f"Kan grondopbouw met id '{id}' niet vinden")
+
+    def get_surfaceline(self, id: str) -> Optional[SurfaceLine]:
+        for sl in self.surfacelines:
+            if sl.id == id:
+                return sl
+
+        raise ValueError(f"Kan dwarsprofiel met id '{id}' niet vinden")
+
     def generate_stix_files(self, output_path: Union[str, Path]) -> None:
         Path(output_path).mkdir(parents=True, exist_ok=True)
-        for combination in self.combinations:
-            pass
-            # print(combination)
 
-    # )
-    # # soilprofile_id_toe = self.combinations.data[i][
-    #     self.combinations.column_index("soilprofile_id_toe")
-    # ]
-    # surfaceline_id = self.combinations.data[i][
-    #     self.combinations.column_index("surfaceline_id")
-    # ]
-    # soilgeometry2D_name = self.combinations.data[i][
-    #     self.combinations.column_index("soilgeometry2d_name")
-    # ]
-    # print(
-    #     soilprofile_id_crest,
-    #     soilprofile_id_toe,
-    #     surfaceline_id,
-    #     soilgeometry2D_name,
-    # )
+        # TODO
+        # maak log bestand met invoer informatie voor debugging / controle
+        # gebruik leveelogic om stix te maken
+        # let op bij 3d punten -> nu wordt x binnenkruin, binnenteen bepaald via x,z punten bij x,y,z gaat dat fout
+
+        for combination in self.combinations:
+            stix_name = Path(output_path) / f"{combination.soilgeometry2D_name}.stix"
+            print(stix_name)
+            crest_soilprofiles = self.get_soilprofile(combination.soilprofile_id_crest)
+            polder_soilprofiles = self.get_soilprofile(combination.soilprofile_id_toe)
+            surfaceline = self.get_surfaceline(combination.surfaceline_id)
+            # print(crest_soilprofiles, polder_soilprofiles, surfaceline)
 
 
 if __name__ == "__main__":
@@ -277,5 +284,4 @@ if __name__ == "__main__":
     )
 
     dam_input = DAMInput.from_folder("data/input")
-    print(dam_input)
-    # dam_input.generate_stix_files("data/output")
+    dam_input.generate_stix_files("data/output")
