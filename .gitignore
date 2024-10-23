@@ -116,7 +116,16 @@ ipython_config.py
 # PEP 582; used by e.g. github.com/David-OConnor/pyflow and github.com/pdm-project/pdm
 __pypackages__/
 
-data/
+data/input/characteristicpoints.csv
+data/input/combinationfile.csv
+data/input/locations.csv
+data/input/scenarios.csv
+data/input/segments.csv
+data/input/slopelayers.csv
+data/input/soilprofiles.csv
+data/input/surfacelines.csv
+
+data/output
 
 # Celery stuff
 celerybeat-schedule

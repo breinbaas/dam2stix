@@ -1,0 +1,11 @@
+code;yd;ys;phi;cohesie
+Veen > 300;10.3;10.3;20.0;2.0
+Veen < 300;11.4;11.4;20.0;2.0
+Klei humeus <14;13.3;13.3;25.5;1.4
+Klei siltig 14,5-16,5;15.4;15.4;26.8;2.8
+Klei zandig >16,5;17.7;17.7;30.8;1.5
+Zand;18;20;32.5;0.0
+Zand_WL;18;20;32.5;0.0
+Basisveen;12;12;20;2
+Pleistoceen zand;18;20;32.5;0
+ophoogmateriaal_klei;17;17;16.9;1.5
