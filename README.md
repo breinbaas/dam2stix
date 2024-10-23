@@ -3,7 +3,7 @@ Code voor Rijnland conversie DAM invoer naar STIX bestanden
 
 ## Werkwijze
 
-* Clone het script met ```git clone git@github.com:breinbaas/leveelogic.git``` of download als ZIP en pak uit 
+* Clone het script met ```git clone git@github.com:breinbaas/dam2stix.git``` of download als ZIP en pak uit 
 * Ga naar deze map (de locatie waar ```main.py``` staat)
 * Maak een map ```data/input``` en ```data/output``` in deze directory aan
 * Open een console in deze map
