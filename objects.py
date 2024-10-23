@@ -1,8 +1,18 @@
 from pydantic import BaseModel
-from typing import List, Optional, Union
+from typing import List, Optional, Union, Tuple
 from pathlib import Path
 import logging
 from enum import IntEnum
+from tqdm import tqdm
+
+from leveelogic.objects.levee import Levee
+from leveelogic.objects.soilprofile import (
+    SoilProfile as LLSoilProfile,
+    SoilLayer as LLSoilLayer,
+)
+from leveelogic.objects.soil import Soil as LLSoil
+from leveelogic.objects.crosssection import Crosssection as LLCrosssection
+
 
 X_UNDEFINED = -9999
 
@@ -79,6 +89,9 @@ class SurfaceLinePoint(BaseModel):
     y: float
     z: float
 
+    def as_2d(self) -> Tuple[float, float]:  # TODO dit werkt niet voor 3D punten
+        return (self.x, self.z)
+
 
 class SurfaceLine(BaseModel):
     id: str
@@ -101,8 +114,8 @@ class DAMInput(BaseModel):
     slopelayers: List[SlopeLayer] = []
     soilprofiles: List[SoilProfile] = []
     surfacelines: List[SurfaceLine] = []
-    segments: List[Segment] = []
-    locations: List[Location] = []
+    # segments: List[Segment] = []
+    # locations: List[Location] = []
     soils: List[Soil] = []
 
     @classmethod
@@ -113,8 +126,8 @@ class DAMInput(BaseModel):
             slopelayers = CSVBasedObect.read(Path(folder) / "slopelayers.csv")
             soilprofiles = CSVBasedObect.read(Path(folder) / "soilprofiles.csv")
             charpoints = CSVBasedObect.read(Path(folder) / "characteristicpoints.csv")
-            segments = CSVBasedObect.read(Path(folder) / "segments.csv")
-            locations = CSVBasedObect.read(Path(folder) / "locations.csv")
+            # segments = CSVBasedObect.read(Path(folder) / "segments.csv")
+            # locations = CSVBasedObect.read(Path(folder) / "locations.csv")
         except Exception as e:
             raise ValueError(f"Fout bij het lezen van de invoergegevens; '{e}'")
 
@@ -195,8 +208,8 @@ class DAMInput(BaseModel):
         #############################
         for d in charpoints.data:
             location_id = d[charpoints.column_index("LOCATIONID")]
-            x_binnenkruin = d[charpoints.column_index("X_Kruin_binnentalud")]
-            x_binnenteen = d[charpoints.column_index("X_Teen_dijk_binnenwaarts")]
+            x_binnenkruin = float(d[charpoints.column_index("X_Kruin_binnentalud")])
+            x_binnenteen = float(d[charpoints.column_index("X_Teen_dijk_binnenwaarts")])
             result.add_charpoints(location_id, x_binnenkruin, x_binnenteen)
 
         ###################
@@ -257,31 +270,112 @@ class DAMInput(BaseModel):
 
         raise ValueError(f"Kan dwarsprofiel met id '{id}' niet vinden")
 
+    def get_slope_layer(self, surfaceline_id: str) -> Optional[SlopeLayer]:
+        for sl in self.slopelayers:
+            if sl.surfaceline_id == surfaceline_id:
+                return sl
+
+        raise ValueError(f"Kan slopelayer met surfaceline_id '{id}' niet vinden")
+
     def generate_stix_files(self, output_path: Union[str, Path]) -> None:
         Path(output_path).mkdir(parents=True, exist_ok=True)
 
-        # TODO
-        # maak log bestand met invoer informatie voor debugging / controle
-        # gebruik leveelogic om stix te maken
         # let op bij 3d punten -> nu wordt x binnenkruin, binnenteen bepaald via x,z punten bij x,y,z gaat dat fout
 
-        for combination in self.combinations:
-            stix_name = Path(output_path) / f"{combination.soilgeometry2D_name}.stix"
-            print(stix_name)
-            crest_soilprofiles = self.get_soilprofile(combination.soilprofile_id_crest)
-            polder_soilprofiles = self.get_soilprofile(combination.soilprofile_id_toe)
-            surfaceline = self.get_surfaceline(combination.surfaceline_id)
-            # print(crest_soilprofiles, polder_soilprofiles, surfaceline)
+        for combination in tqdm(self.combinations):
+            # generate filenames
+            stix_filename = (
+                Path(output_path) / f"{combination.soilgeometry2D_name}.stix"
+            )
+            log_filename = Path(output_path) / f"{combination.soilgeometry2D_name}.log"
 
+            # get data
+            try:
+                crest_soilprofile = self.get_soilprofile(
+                    combination.soilprofile_id_crest
+                )
+                polder_soilprofile = self.get_soilprofile(
+                    combination.soilprofile_id_toe
+                )
+                surfaceline = self.get_surfaceline(combination.surfaceline_id)
+                slope_layer = self.get_slope_layer(combination.surfaceline_id)
+            except Exception as e:
+                logging.error(
+                    f"Fout bij het afhandelen van '{combination.soilgeometry2D_name}'; '{e}'"
+                )
 
-if __name__ == "__main__":
-    logging.basicConfig(
-        filename="dam2stix.log",
-        filemode="w",
-        format="%(asctime)s %(levelname)s %(message)s",
-        datefmt="%H:%M:%S",
-        level=logging.INFO,
-    )
+            # write a summary of the input
+            flog = open(log_filename, "w")
+            flog.write("LOGFILE\n")
+            flog.write(f"soilgeometry2D_name: {combination.soilgeometry2D_name}\n")
+            flog.write("-----------------\n")
+            flog.write("GRONDOPBOUW KRUIN\n")
+            flog.write("-----------------\n")
+            for l in crest_soilprofile.layers:
+                flog.write(f"{l.top:8.2f},{l.bottom:8.2f}, {l.soil_name}\n")
+            flog.write("----------------\n")
+            flog.write("GRONDOPBOUW TEEN\n")
+            flog.write("----------------\n")
+            for l in polder_soilprofile.layers:
+                flog.write(f"{l.top:8.2f},{l.bottom:8.2f}, {l.soil_name}\n")
+            flog.write("-----------------------\n")
+            flog.write("GRONDSOORTEN PARAMETERS\n")
+            flog.write("-----------------------\n")
+            flog.write("name                       yd     ys     c       phi\n")
+            for s in self.soils:
+                flog.write(
+                    f"{s.name:25s} {s.yd:6.2f} {s.ys:6.2f} {s.c:6.2f} {s.phi:6.2f}\n"
+                )
+            flog.write("------------\n")
+            flog.write("DEKLAAG KLEI\n")
+            flog.write("------------\n")
+            flog.write(f"Xbinnenkruin  : {surfaceline.x_binnenkruin:5.2f} [m]\n")
+            flog.write(f"Xbinnenteen   : {surfaceline.x_binnenteen:5.2f} [m]\n")
+            flog.write(
+                f"Kleilaag dikte: {slope_layer.slope_layer_thickness:5.2f} [m]\n"
+            )
 
-    dam_input = DAMInput.from_folder("data/input")
-    dam_input.generate_stix_files("data/output")
+            flog.close()
+
+            ##########################
+            # GENERATE THE STIX FILE #
+            ##########################
+            ll_soils = [
+                LLSoil(code=s.name, yd=s.yd, ys=s.ys, c=s.c, phi=s.phi, color="#000000")
+                for s in self.soils
+            ]
+            sp_crest = LLSoilProfile(
+                soillayers=[
+                    LLSoilLayer(top=l.top, bottom=l.bottom, soilcode=l.soil_name)
+                    for l in crest_soilprofile.layers
+                ]
+            )
+            sp_polder = LLSoilProfile(
+                soillayers=[
+                    LLSoilLayer(top=l.top, bottom=l.bottom, soilcode=l.soil_name)
+                    for l in polder_soilprofile.layers
+                ]
+            )
+
+            crosssection = LLCrosssection(
+                points=[p.as_2d() for p in surfaceline.points]
+            )
+
+            levee = Levee.from_soilprofiles(
+                profile_waterside=sp_crest,
+                profile_landside=sp_polder,
+                crosssection=crosssection,
+                x_landside=0.0,
+                soils=ll_soils,
+                fill_soilcode="Zand",
+            )
+
+            if slope_layer.slope_layer_thickness > 0:
+                levee.add_toplayer(
+                    x_start=surfaceline.x_binnenkruin,
+                    x_end=surfaceline.x_binnenteen,
+                    height=slope_layer.slope_layer_thickness,
+                    soilcode="ophoogmateriaal_klei",
+                )
+
+            levee.to_stix(stix_filename)
