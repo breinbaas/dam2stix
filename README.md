@@ -42,7 +42,7 @@ ophoogmateriaal_klei;17;17;16.9;1.5
 
 **LET OP** als je de code cloned wordt dit bestand automatisch aangemaakt.
 
-In de output directory wordt een bestand ```areas.csv``` aangemaakt met daarin de oppervlaktes per grondsoort per berekening. Let op dat de veldscheiding in dit csv bestand de **puntkomma** en de decimaalscheiding een **punt** is.
+In de output directory wordt het bestand ```areas.csv``` aangemaakt met daarin de oppervlaktes per grondsoort per berekening. Let op dat de veldscheiding in dit csv bestand de **puntkomma** en de decimaalscheiding een **punt** is.
 
 ## TODO
 
