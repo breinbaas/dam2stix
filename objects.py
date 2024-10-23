@@ -223,8 +223,10 @@ class DAMInput(BaseModel):
                     name=args[0],
                     yd=float(args[1]),
                     ys=float(args[2]),
-                    c=float(args[3]),
-                    phi=float(args[4]),
+                    c=float(
+                        args[4]
+                    ),  # 4.. niet zo handig.. maar goed, csv bestand is zo opgesteld :-)
+                    phi=float(args[3]),
                 )
             )
 
@@ -365,7 +367,7 @@ class DAMInput(BaseModel):
                 profile_waterside=sp_crest,
                 profile_landside=sp_polder,
                 crosssection=crosssection,
-                x_landside=0.0,
+                x_landside=surfaceline.x_binnenteen,
                 soils=ll_soils,
                 fill_soilcode="Zand",
             )
