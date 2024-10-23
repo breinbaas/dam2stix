@@ -13,7 +13,7 @@ Code voor Rijnland conversie DAM invoer naar STIX bestanden
 * Plaats de benodigde csv bestanden in de data/input directory
 * Voer de code uit ```python main.py```
 
-De gegenereerde bestanden komen in de ```data\output``` directory en bestaan uit .log bestanden met de gebruikte invoergegevens en de .stix bestanden met de berekeningen.
+De gegenereerde bestanden komen in de ```data/output``` directory en bestaan uit .log bestanden met de gebruikte invoergegevens en de .stix bestanden met de berekeningen.
 
 ## Benodigde invoerbestanden
 
@@ -45,3 +45,4 @@ ophoogmateriaal_klei;17;17;16.9;1.5
 * code Zand_WL komt af en toe voor, parameters? Voor nu opgelost door dezelfde parameters als voor Zand te gebruiken
 * let op dat grondsoort codes case sensitive zijn (vooralsnog geen fouten hierdoor)
 * oppervlakte bepaling
+* Dit werkt nu met x,z coordinaten, **als er DAM invoer is met x,y,z coordinaten dan werkt dit nog niet!**
