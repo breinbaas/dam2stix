@@ -282,6 +282,11 @@ class DAMInput(BaseModel):
     def generate_stix_files(self, output_path: Union[str, Path]) -> None:
         Path(output_path).mkdir(parents=True, exist_ok=True)
 
+        area_file = open(Path(output_path) / f"areas.csv", "w")
+        soilnames = [s.name for s in self.soils]
+        header = "id;" + ";".join(soilnames)
+        area_file.write(f"{header}\n")
+
         # let op bij 3d punten -> nu wordt x binnenkruin, binnenteen bepaald via x,z punten bij x,y,z gaat dat fout
 
         for combination in tqdm(self.combinations):
@@ -380,4 +385,16 @@ class DAMInput(BaseModel):
                     soilcode="ophoogmateriaal_klei",
                 )
 
+            areas = {s: 0.0 for s in [s.name for s in self.soils]}
+            for spg in levee.soilpolygons:
+                areas[spg.soilcode] += spg.to_shapely().area
+
+            s = f"{combination.soilgeometry2D_name};"
+            for soilname in soilnames:
+                s += f"{areas[soilname]:.2f};"
+            s = s[:-1] + "\n"
+            area_file.write(s)
+
             levee.to_stix(stix_filename)
+
+        area_file.close()
