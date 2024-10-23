@@ -385,7 +385,7 @@ class DAMInput(BaseModel):
                     soilcode="ophoogmateriaal_klei",
                 )
 
-            areas = {s: 0.0 for s in [s.name for s in self.soils]}
+            areas = {s: 0.0 for s in soilnames}
             for spg in levee.soilpolygons:
                 areas[spg.soilcode] += spg.to_shapely().area
 
