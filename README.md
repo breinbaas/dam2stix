@@ -42,9 +42,10 @@ ophoogmateriaal_klei;17;17;16.9;1.5
 
 **LET OP** als je de code cloned wordt dit bestand automatisch aangemaakt.
 
+In de output directory wordt een bestand 'areas.csv' aangemaakt met daarin de oppervlaktes per grondsoort per berekening. Let op dat de veldscheiding in dit csv bestand de **puntkomma** en de decimaalscheiding een **punt** is.
+
 ## TODO
 
 * code Zand_WL komt af en toe voor, parameters? Voor nu opgelost door dezelfde parameters als voor Zand te gebruiken
 * let op dat grondsoort codes case sensitive zijn (vooralsnog geen fouten hierdoor)
-* oppervlakte bepaling
 * Dit werkt nu met x,z coordinaten, **als er DAM invoer is met x,y,z coordinaten dan werkt dit nog niet!**
