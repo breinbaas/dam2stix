@@ -5,7 +5,7 @@ Code voor Rijnland conversie DAM invoer naar STIX bestanden
 
 * Clone het script met ```git clone git@github.com:breinbaas/dam2stix.git``` of download als ZIP en pak uit 
 * Ga naar deze map (de locatie waar ```main.py``` staat)
-* Maak een map ```data/input``` en ```data/output``` in deze directory aan
+* Maak een map ```data/input``` en ```data/output``` in deze directory aan (**LET OP** als je de code cloned worden deze mappen vanzelf aangemaakt)
 * Open een console in deze map
 * Creeer een virtuele omgeving ```python -m venv .venv```
 * Activeer de virtuele omgeving ```.venv\Scripts\activate``` (let op dat je autocompletion kunt gebruiken met TAB)
@@ -39,6 +39,8 @@ Basisveen;12;12;20;2
 Pleistoceen zand;18;20;32.5;0
 ophoogmateriaal_klei;17;17;16.9;1.5
 ```
+
+**LET OP** als je de code cloned wordt dit bestand automatisch aangemaakt.
 
 ## TODO
 
