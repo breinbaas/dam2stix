@@ -4,6 +4,7 @@ from pathlib import Path
 import logging
 from enum import IntEnum
 from tqdm import tqdm
+from math import hypot
 
 from leveelogic.objects.levee import Levee
 from leveelogic.objects.soilprofile import (
@@ -89,8 +90,23 @@ class SurfaceLinePoint(BaseModel):
     y: float
     z: float
 
-    def as_2d(self) -> Tuple[float, float]:  # TODO dit werkt niet voor 3D punten
-        return (self.x, self.z)
+    def as_2d(
+        self, start_point: Optional["SurfaceLinePoint"] = None
+    ) -> Tuple[float, float]:  # TODO dit werkt niet voor 3D punten
+        """Return this point as a x,z 2D point
+
+        Args:
+            start_point (Optional[SurfaceLinePoint], if set this will be used to calculate the x
+            value as the distance between the startpoint and this point. Note that this will always
+            result in a positive value so the startpoint has to be at the beginning or end of a line
+
+        Returns:
+            Tuple[float, float]: Tuple of x,z coordinates
+        """
+        if start_point is not None:
+            return (hypot(start_point.x - self.x, start_point.y - self.y), self.z)
+        else:
+            return (self.x, self.z)
 
 
 class SurfaceLine(BaseModel):

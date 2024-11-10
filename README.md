@@ -47,5 +47,5 @@ In de output directory wordt het bestand ```areas.csv``` aangemaakt met daarin d
 ## TODO
 
 * code Zand_WL komt af en toe voor, parameters? Voor nu opgelost door dezelfde parameters als voor Zand te gebruiken
-* let op dat grondsoort codes case sensitive zijn (vooralsnog geen fouten hierdoor)
-* Dit werkt nu met x,z coordinaten, **als er DAM invoer is met x,y,z coordinaten dan werkt dit nog niet!**
+* let op dat grondsoort codes case sensitive zijn (vooralsnog geen fouten hierdoor, houden zo of converteren naar lower case?)
+* Dit werkt nu met x,z coordinaten, **code voor xyz is wel geimplementeerd maar niet getest!**
