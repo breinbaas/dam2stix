@@ -5,6 +5,8 @@ import logging
 from enum import IntEnum
 from tqdm import tqdm
 from math import hypot
+import shapefile
+
 
 from leveelogic.objects.levee import Levee
 from leveelogic.objects.soilprofile import (
@@ -85,6 +87,12 @@ class SoilProfile(BaseModel):
         self.layers = sorted(self.layers, key=lambda x: x.top, reverse=True)
 
 
+class PolderPeil(BaseModel):
+    location_id: str
+    max_peil: float
+    min_peil: float
+
+
 class SurfaceLinePoint(BaseModel):
     x: float
     y: float
@@ -122,7 +130,8 @@ class Segment(BaseModel):
 
 
 class Location(BaseModel):
-    pass
+    id: str
+    surfaceline_id: str
 
 
 class DAMInput(BaseModel):
@@ -130,8 +139,8 @@ class DAMInput(BaseModel):
     slopelayers: List[SlopeLayer] = []
     soilprofiles: List[SoilProfile] = []
     surfacelines: List[SurfaceLine] = []
-    # segments: List[Segment] = []
-    # locations: List[Location] = []
+    polderpeilen: List[PolderPeil] = []
+    locations: List[Location] = []
     soils: List[Soil] = []
 
     @classmethod
@@ -142,10 +151,34 @@ class DAMInput(BaseModel):
             slopelayers = CSVBasedObect.read(Path(folder) / "slopelayers.csv")
             soilprofiles = CSVBasedObect.read(Path(folder) / "soilprofiles.csv")
             charpoints = CSVBasedObect.read(Path(folder) / "characteristicpoints.csv")
-            # segments = CSVBasedObect.read(Path(folder) / "segments.csv")
-            # locations = CSVBasedObect.read(Path(folder) / "locations.csv")
+            locations = CSVBasedObect.read(Path(folder) / "locations.csv")
+
+            sf_polderpeilen = shapefile.Reader(Path(folder) / "locations_peilen")
+
+            ################
+            # POLDERPEILEN #
+            ################
+            for rec in sf_polderpeilen.records():
+                result.polderpeilen.append(
+                    PolderPeil(
+                        location_id=rec["locationid"],
+                        min_peil=rec["MIN_PEIL"],
+                        max_peil=rec["MAX_PEIL"],
+                    )
+                )
         except Exception as e:
             raise ValueError(f"Fout bij het lezen van de invoergegevens; '{e}'")
+
+        ###############################################
+        # LOCATIONS (nodig om polderpeilen te vinden) #
+        ###############################################
+        for d in locations.data:
+            result.locations.append(
+                Location(
+                    id=d[locations.column_index("location_id")],
+                    surfaceline_id=d[locations.column_index("surfaceline_id")],
+                )
+            )
 
         ################
         # COMBINATIONS #
@@ -295,6 +328,23 @@ class DAMInput(BaseModel):
 
         raise ValueError(f"Kan slopelayer met surfaceline_id '{id}' niet vinden")
 
+    def get_polderpeilen(self, location_id: str) -> Optional[PolderPeil]:
+        for pp in self.polderpeilen:
+            if pp.location_id == location_id:
+                return pp
+        raise ValueError(
+            f"Kan polderpeilen voor location_id '{location_id}' niet vinden"
+        )
+
+    def get_location(self, surfaceline_id: str) -> Optional[Location]:
+        for l in self.locations:
+            if l.surfaceline_id == surfaceline_id:
+                return l
+
+        raise ValueError(
+            f"Kan location voor surfaceline_id '{surfaceline_id}' niet vinden"
+        )
+
     def generate_stix_files(self, output_path: Union[str, Path]) -> None:
         Path(output_path).mkdir(parents=True, exist_ok=True)
 
@@ -322,6 +372,8 @@ class DAMInput(BaseModel):
                 )
                 surfaceline = self.get_surfaceline(combination.surfaceline_id)
                 slope_layer = self.get_slope_layer(combination.surfaceline_id)
+                location = self.get_location(surfaceline.id)
+                polderpeilen = self.get_polderpeilen(location.id)
             except Exception as e:
                 logging.error(
                     f"Fout bij het afhandelen van '{combination.soilgeometry2D_name}'; '{e}'"
@@ -341,6 +393,11 @@ class DAMInput(BaseModel):
             flog.write("----------------\n")
             for l in polder_soilprofile.layers:
                 flog.write(f"{l.top:8.2f},{l.bottom:8.2f}, {l.soil_name}\n")
+            flog.write("------------\n")
+            flog.write("POLDERPEILEN\n")
+            flog.write("------------\n")
+            flog.write(f"Minimaal  : {polderpeilen.min_peil:5.2f} [m]\n")
+            flog.write(f"Maximaal  : {polderpeilen.max_peil:5.2f} [m]\n")
             flog.write("-----------------------\n")
             flog.write("GRONDSOORTEN PARAMETERS\n")
             flog.write("-----------------------\n")

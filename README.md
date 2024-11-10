@@ -19,12 +19,14 @@ De gegenereerde bestanden komen in de ```data/output``` directory en bestaan uit
 
 * combinationfile.csv
 * slopelayers.csv
+* locations.csv
 * soilprofiles.csv
 * characteristicpoints.csv
-* combinationfile.csv
+* surfacelines.csv
 * soilparameters.csv
+* locations_peilen.shp, locations_peilen.shx, locations_peilen.dbf
 
-Alle bestanden m.u.v. ```soilparameters.csv``` komen uit de DAM invoer bestanden. Een voorbeeld van het ```soilparameters.csv``` bestand is hieronder weergegeven;
+Alle bestanden m.u.v. ```soilparameters.csv``` en ```locations_peilen.*``` komen uit de DAM invoer bestanden. Een voorbeeld van het ```soilparameters.csv``` bestand is hieronder weergegeven;
 
 ```
 code;yd;ys;phi;cohesie
@@ -41,6 +43,13 @@ ophoogmateriaal_klei;17;17;16.9;1.5
 ```
 
 **LET OP** als je de code cloned wordt dit bestand automatisch aangemaakt.
+
+De locations_peilen moet de volgende (hoofdlettergevoelige) velden bevatten; 
+
+* locationid
+* MIN_PEIL
+* MAX_PEIL
+
 
 In de output directory wordt het bestand ```areas.csv``` aangemaakt met daarin de oppervlaktes per grondsoort per berekening. Let op dat de veldscheiding in dit csv bestand de **puntkomma** en de decimaalscheiding een **punt** is.
 
