@@ -6,6 +6,7 @@ from enum import IntEnum
 from tqdm import tqdm
 from math import hypot
 import shapefile
+from shapely import Polygon
 
 
 from leveelogic.objects.levee import Levee
@@ -123,6 +124,7 @@ class SurfaceLine(BaseModel):
 
     x_binnenkruin: float = X_UNDEFINED
     x_binnenteen: float = X_UNDEFINED
+    x_buitenteen: float = X_UNDEFINED
 
 
 class Segment(BaseModel):
@@ -259,7 +261,10 @@ class DAMInput(BaseModel):
             location_id = d[charpoints.column_index("LOCATIONID")]
             x_binnenkruin = float(d[charpoints.column_index("X_Kruin_binnentalud")])
             x_binnenteen = float(d[charpoints.column_index("X_Teen_dijk_binnenwaarts")])
-            result.add_charpoints(location_id, x_binnenkruin, x_binnenteen)
+            x_buitenteen = float(d[charpoints.column_index("X_Teen_dijk_buitenwaarts")])
+            result.add_charpoints(
+                location_id, x_binnenkruin, x_binnenteen, x_buitenteen
+            )
 
         ###################
         # SOIL PARAMETERS #
@@ -295,12 +300,17 @@ class DAMInput(BaseModel):
         return result
 
     def add_charpoints(
-        self, location_id: str, x_binnenkruin: float, x_binnenteen: float
+        self,
+        location_id: str,
+        x_binnenkruin: float,
+        x_binnenteen: float,
+        x_buitenteen: float,
     ) -> None:
         for i in range(len(self.surfacelines)):
             if self.surfacelines[i].id == location_id:
                 self.surfacelines[i].x_binnenkruin = x_binnenkruin
                 self.surfacelines[i].x_binnenteen = x_binnenteen
+                self.surfacelines[i].x_buitenteen = x_buitenteen
                 return
 
         raise ValueError(
@@ -349,9 +359,11 @@ class DAMInput(BaseModel):
         Path(output_path).mkdir(parents=True, exist_ok=True)
 
         area_file = open(Path(output_path) / f"areas.csv", "w")
+        limited_area_file = open(Path(output_path) / f"limited_areas.csv", "w")
         soilnames = [s.name for s in self.soils]
         header = "id;" + ";".join(soilnames)
         area_file.write(f"{header}\n")
+        limited_area_file.write(f"{header}\n")
 
         # let op bij 3d punten -> nu wordt x binnenkruin, binnenteen bepaald via x,z punten bij x,y,z gaat dat fout
 
@@ -409,6 +421,7 @@ class DAMInput(BaseModel):
             flog.write("------------\n")
             flog.write("DEKLAAG KLEI\n")
             flog.write("------------\n")
+            flog.write(f"Xbuitenteen   : {surfaceline.x_buitenteen:5.2f} [m]\n")
             flog.write(f"Xbinnenkruin  : {surfaceline.x_binnenkruin:5.2f} [m]\n")
             flog.write(f"Xbinnenteen   : {surfaceline.x_binnenteen:5.2f} [m]\n")
             flog.write(
@@ -459,15 +472,62 @@ class DAMInput(BaseModel):
                 )
 
             areas = {s: 0.0 for s in soilnames}
+            limited_areas = {s: 0.0 for s in soilnames}
+
+            left_subtract = Polygon(
+                [
+                    (levee.left - 1.0, levee.top + 1.0),
+                    (surfaceline.x_buitenteen, levee.top + 1.0),
+                    (surfaceline.x_buitenteen, levee.bottom - 1.0),
+                    (levee.left - 1.0, levee.bottom - 1.0),
+                    (levee.left - 1.0, levee.top + 1.0),
+                ]
+            )
+            right_subtract = Polygon(
+                [
+                    (surfaceline.x_binnenteen, levee.top + 1.0),
+                    (levee.right + 1.0, levee.top + 1.0),
+                    (levee.right + 1.0, levee.bottom - 1.0),
+                    (surfaceline.x_binnenteen, levee.bottom - 1.0),
+                    (surfaceline.x_binnenteen, levee.top + 1.0),
+                ]
+            )
+            bottom_subtract = Polygon(
+                [
+                    (levee.left - 1.0, polderpeilen.min_peil),
+                    (levee.right + 1.0, polderpeilen.min_peil),
+                    (levee.right + 1.0, levee.bottom - 1.0),
+                    (levee.left - 1.0, levee.bottom - 1.0),
+                    (levee.left - 1.0, polderpeilen.min_peil),
+                ]
+            )
+
             for spg in levee.soilpolygons:
                 areas[spg.soilcode] += spg.to_shapely().area
 
+                # limit to binnen- en buitenteen en minimaal polderpeil
+                pg = spg.to_shapely()
+
+                if pg.intersects(left_subtract):
+                    pg = pg.difference(left_subtract)
+                if pg.intersects(right_subtract):
+                    pg = pg.difference(right_subtract)
+                if pg.intersects(bottom_subtract):
+                    pg = pg.difference(bottom_subtract)
+
+                limited_areas[spg.soilcode] += pg.area
+
             s = f"{combination.soilgeometry2D_name};"
+            s_limited = f"{combination.soilgeometry2D_name};"
             for soilname in soilnames:
                 s += f"{areas[soilname]:.2f};"
+                s_limited += f"{limited_areas[soilname]:.2f};"
             s = s[:-1] + "\n"
+            s_limited = s_limited[:-1] + "\n"
             area_file.write(s)
+            limited_area_file.write(s_limited)
 
             levee.to_stix(stix_filename)
 
         area_file.close()
+        limited_area_file.close()
