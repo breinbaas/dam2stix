@@ -50,8 +50,13 @@ De locations_peilen moet de volgende (hoofdlettergevoelige) velden bevatten;
 * MIN_PEIL
 * MAX_PEIL
 
+In de output directory wordt het bestand ```areas.csv``` aangemaakt met daarin de oppervlaktes per grondsoort per berekening. Tevens wordt een bestand ```limited_areas.csv``` aangemaakt waarbij de grondsoorten en hun oppervlaktes worden gerapporteerd met de volgende geometrische regels;
 
-In de output directory wordt het bestand ```areas.csv``` aangemaakt met daarin de oppervlaktes per grondsoort per berekening. Let op dat de veldscheiding in dit csv bestand de **puntkomma** en de decimaalscheiding een **punt** is.
+* de geometrie is aan de linkerzijde begrensd door de x coordinaat van de buitenteen
+* de geometrie is aan de rechterzijde begrensd door de x coordinaat van de binnenteen
+* de geometrie is aan de onderzijde begrensd door het minimale polderpeil
+
+ Let op dat de veldscheiding in deze area csv bestanden de **puntkomma** en de decimaalscheiding een **punt** is.
 
 ## TODO
 
