@@ -134,8 +134,14 @@ class SurfaceLine(BaseModel):
     points: List[SurfaceLinePoint] = []
 
     x_binnenkruin: float = X_UNDEFINED
+    x_buitenkruin: float = X_UNDEFINED
     x_binnenteen: float = X_UNDEFINED
     x_buitenteen: float = X_UNDEFINED
+    x_insteek_binnenberm: float = X_UNDEFINED
+
+    @property
+    def has_berm(self) -> bool:
+        return self.x_insteek_binnenberm != X_UNDEFINED
 
 
 class Segment(BaseModel):
@@ -301,10 +307,19 @@ class DAMInput(BaseModel):
         for d in charpoints.data:
             location_id = d[charpoints.column_index("LOCATIONID")]
             x_binnenkruin = float(d[charpoints.column_index("X_Kruin_binnentalud")])
+            x_buitenkruin = float(d[charpoints.column_index("X_Kruin_buitentalud")])
             x_binnenteen = float(d[charpoints.column_index("X_Teen_dijk_binnenwaarts")])
             x_buitenteen = float(d[charpoints.column_index("X_Teen_dijk_buitenwaarts")])
+            x_insteek_binnenberm = float(
+                d[charpoints.column_index("X_Insteek_binnenberm")]
+            )
             result.add_charpoints(
-                location_id, x_binnenkruin, x_binnenteen, x_buitenteen
+                location_id,
+                x_binnenkruin,
+                x_binnenteen,
+                x_buitenteen,
+                x_buitenkruin,
+                x_insteek_binnenberm,
             )
 
         ###################
@@ -346,12 +361,17 @@ class DAMInput(BaseModel):
         x_binnenkruin: float,
         x_binnenteen: float,
         x_buitenteen: float,
+        x_buitenkruin: float,
+        x_insteek_binnenberm: float,
     ) -> None:
         for i in range(len(self.surfacelines)):
             if self.surfacelines[i].id == location_id:
                 self.surfacelines[i].x_binnenkruin = x_binnenkruin
                 self.surfacelines[i].x_binnenteen = x_binnenteen
                 self.surfacelines[i].x_buitenteen = x_buitenteen
+                self.surfacelines[i].x_buitenkruin = x_buitenkruin
+                if x_insteek_binnenberm != -1.0:
+                    self.surfacelines[i].x_insteek_binnenberm = x_insteek_binnenberm
                 return
 
         raise ValueError(
@@ -486,12 +506,21 @@ class DAMInput(BaseModel):
                 flog.write(
                     f"{s.name:25s} {s.yd:6.2f} {s.ys:6.2f} {s.c:6.2f} {s.phi:6.2f}\n"
                 )
+            flog.write("----------------------\n")
+            flog.write("KARAKTERISTIEKE PUNTEN\n")
+            flog.write("----------------------\n")
+            flog.write(f"Xbuitenteen   : {surfaceline.x_buitenteen:5.2f} [m]\n")
+            flog.write(f"Xbuitenkruin  : {surfaceline.x_buitenkruin:5.2f} [m]\n")
+            flog.write(f"Xbinnenkruin  : {surfaceline.x_binnenkruin:5.2f} [m]\n")
+            if surfaceline.has_berm:
+                flog.write(
+                    f"Xinsteekberm  : {surfaceline.x_insteek_binnenberm:5.2f} [m]\n"
+                )
+            flog.write(f"Xbinnenteen   : {surfaceline.x_binnenteen:5.2f} [m]\n")
+
             flog.write("------------\n")
             flog.write("DEKLAAG KLEI\n")
             flog.write("------------\n")
-            flog.write(f"Xbuitenteen   : {surfaceline.x_buitenteen:5.2f} [m]\n")
-            flog.write(f"Xbinnenkruin  : {surfaceline.x_binnenkruin:5.2f} [m]\n")
-            flog.write(f"Xbinnenteen   : {surfaceline.x_binnenteen:5.2f} [m]\n")
             flog.write(
                 f"Kleilaag dikte: {slope_layer.slope_layer_thickness:5.2f} [m]\n"
             )
@@ -538,6 +567,26 @@ class DAMInput(BaseModel):
                     height=slope_layer.slope_layer_thickness,
                     soilcode="ophoogmateriaal_klei",
                 )
+
+            # add phreatic line
+            plpoints = [(levee.left, toetspeil.peil)]
+            plpoints.append(
+                (surfaceline.x_buitenkruin, toetspeil.peil)
+            )  # TODO, offset mogelijk
+            plpoints.append(
+                (surfaceline.x_binnenkruin, toetspeil.peil - toetspeil.verschil)
+            )
+            if surfaceline.has_berm:  # TODO implement
+                plpoints.append(
+                    (surfaceline.x_insteek_binnenberm, polderpeilen.min_peil)
+                )  # TODO polderpeilen.min_peil?
+            plpoints.append(
+                (surfaceline.x_binnenteen, polderpeilen.min_peil)
+            )  # TODO polderpeilen.min_peil?
+            plpoints.append(
+                (levee.right, polderpeilen.min_peil)
+            )  # TODO polderpeilen.min_peil?
+            levee.add_phreatic_line(points=plpoints)
 
             areas = {s: 0.0 for s in soilnames}
             limited_areas = {s: 0.0 for s in soilnames}

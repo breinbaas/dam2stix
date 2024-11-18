@@ -27,7 +27,7 @@ De gegenereerde bestanden komen in de ```data/output``` directory en bestaan uit
 * surfacelines.csv
 * soilparameters.csv
 
-Alle bestanden m.u.v. ```soilparameters.csv``` en ```locations_peilen.*``` komen uit de DAM invoer bestanden. Een voorbeeld van het ```soilparameters.csv``` bestand is hieronder weergegeven;
+Alle csv bestanden m.u.v. ```soilparameters.csv``` komen uit de DAM invoer bestanden. Een voorbeeld van het ```soilparameters.csv``` bestand is hieronder weergegeven;
 
 ```
 code;yd;ys;phi;cohesie
@@ -47,7 +47,7 @@ ophoogmateriaal_klei;17;17;16.9;1.5
 
 ### Shape bestanden
 
-De naam van de shapebestanden kan in ```main.py``` gedefinieerd worden in de constante ```SHAPE_FILENAMES```. De shapebestanden zelf moeten in de input directory staan en de SHP, SHX en DBF bestanden zijn vereist om een compleet shapebestand te zijn.
+De naam van de shapebestanden zijn in ```main.py``` gedefinieerd in de constante ```SHAPE_FILENAMES```. De shapebestanden zelf moeten in de input directory staan en de SHP, SHX en DBF bestanden zijn vereist om een compleet shapebestand te zijn.
 
 Standaard zijn de namen als volgt aangenomen;
 
@@ -97,3 +97,4 @@ In de output directory wordt het bestand ```areas.csv``` aangemaakt met daarin d
 * code Zand_WL komt af en toe voor, parameters? Voor nu opgelost door dezelfde parameters als voor Zand te gebruiken
 * let op dat grondsoort codes case sensitive zijn (vooralsnog geen fouten hierdoor, houden zo of converteren naar lower case?)
 * Dit werkt nu met x,z coordinaten, **code voor xyz is wel geimplementeerd maar niet getest!**
+* De foutafhandeling kan wat netter, nu zou het script stoppen als er voor 1 location_id (deels) geen data wordt gevonden
