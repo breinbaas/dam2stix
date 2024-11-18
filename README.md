@@ -17,6 +17,8 @@ De gegenereerde bestanden komen in de ```data/output``` directory en bestaan uit
 
 ## Benodigde invoerbestanden
 
+### CSV Bestanden
+
 * combinationfile.csv
 * slopelayers.csv
 * locations.csv
@@ -24,7 +26,6 @@ De gegenereerde bestanden komen in de ```data/output``` directory en bestaan uit
 * characteristicpoints.csv
 * surfacelines.csv
 * soilparameters.csv
-* locations_peilen.shp, locations_peilen.shx, locations_peilen.dbf
 
 Alle bestanden m.u.v. ```soilparameters.csv``` en ```locations_peilen.*``` komen uit de DAM invoer bestanden. Een voorbeeld van het ```soilparameters.csv``` bestand is hieronder weergegeven;
 
@@ -44,11 +45,44 @@ ophoogmateriaal_klei;17;17;16.9;1.5
 
 **LET OP** als je de code cloned wordt dit bestand automatisch aangemaakt.
 
-De locations_peilen moet de volgende (hoofdlettergevoelige) velden bevatten; 
+### Shape bestanden
+
+De naam van de shapebestanden kan in ```main.py``` gedefinieerd worden in de constante ```SHAPE_FILENAMES```. De shapebestanden zelf moeten in de input directory staan en de SHP, SHX en DBF bestanden zijn vereist om een compleet shapebestand te zijn.
+
+Standaard zijn de namen als volgt aangenomen;
+
+```
+SHAPE_FILENAMES = {
+    "polderpeilen": "locations_peilen",
+    "stijghoogtes": "stijghoogteAtLocations",
+    "toetspeilen": "toetspeil_V1",
+}
+```
+
+oftewel, de polderpeilen staan in een shape bestand genaamd ```input/locations_peilen (shp, shx, dbf)``` etc.
+
+De polderpeilen shape moet de volgende (hoofdlettergevoelige) velden bevatten; 
 
 * locationid
 * MIN_PEIL
 * MAX_PEIL
+
+De stijghoogtes shape moet de volgende (hoofdlettergevoelige) velden bevatten; 
+
+* locationid
+* HOOGTE
+
+De toetspeilen shape moet de volgende (hoofdlettergevoelige) velden bevatten; 
+
+* CODE
+* TOETSPEIL
+
+Waarbij 'CODE' overeenkomt met de location id.
+
+**NB** de benaming van de velden is overgenomen uit de eerste levering van de shapebestanden ten tijde van het schrijven van deze scripts.
+
+
+## Uitvoer
 
 In de output directory wordt het bestand ```areas.csv``` aangemaakt met daarin de oppervlaktes per grondsoort per berekening. Tevens wordt een bestand ```limited_areas.csv``` aangemaakt waarbij de grondsoorten en hun oppervlaktes worden gerapporteerd met de volgende geometrische regels;
 

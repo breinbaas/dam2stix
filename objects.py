@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import List, Optional, Union, Tuple
+from typing import List, Optional, Union, Tuple, Dict
 from pathlib import Path
 import logging
 from enum import IntEnum
@@ -94,6 +94,17 @@ class PolderPeil(BaseModel):
     min_peil: float
 
 
+class Stijghoogte(BaseModel):
+    location_id: str
+    hoogte: float
+
+
+class Toetspeil(BaseModel):
+    location_id: str
+    peil: float
+    verschil: float
+
+
 class SurfaceLinePoint(BaseModel):
     x: float
     y: float
@@ -142,11 +153,13 @@ class DAMInput(BaseModel):
     soilprofiles: List[SoilProfile] = []
     surfacelines: List[SurfaceLine] = []
     polderpeilen: List[PolderPeil] = []
+    stijghoogtes: List[Stijghoogte] = []
+    toetspeilen: List[Toetspeil] = []
     locations: List[Location] = []
     soils: List[Soil] = []
 
     @classmethod
-    def from_folder(cls, folder: str) -> Optional["DAMInput"]:
+    def from_folder(cls, folder: str, shapenames_dict: Dict) -> Optional["DAMInput"]:
         result = DAMInput()
         try:
             combinations = CSVBasedObect.read(Path(folder) / "combinationfile.csv")
@@ -155,11 +168,12 @@ class DAMInput(BaseModel):
             charpoints = CSVBasedObect.read(Path(folder) / "characteristicpoints.csv")
             locations = CSVBasedObect.read(Path(folder) / "locations.csv")
 
-            sf_polderpeilen = shapefile.Reader(Path(folder) / "locations_peilen")
-
             ################
             # POLDERPEILEN #
             ################
+            sf_polderpeilen = shapefile.Reader(
+                Path(folder) / shapenames_dict["polderpeilen"]
+            )
             for rec in sf_polderpeilen.records():
                 result.polderpeilen.append(
                     PolderPeil(
@@ -168,6 +182,33 @@ class DAMInput(BaseModel):
                         max_peil=rec["MAX_PEIL"],
                     )
                 )
+
+            ###############
+            # STIJGHOOGTE #
+            ###############
+            sf_stijghoogte = shapefile.Reader(
+                Path(folder) / shapenames_dict["stijghoogte"]
+            )
+            for rec in sf_stijghoogte.records():
+                result.stijghoogtes.append(
+                    Stijghoogte(location_id=rec["locationid"], hoogte=rec["HOOGTE"])
+                )
+
+            ###############
+            # TOETSPEILEN #
+            ###############
+            sf_toetspeilen = shapefile.Reader(
+                Path(folder) / shapenames_dict["toetspeilen"]
+            )
+            for rec in sf_toetspeilen.records():
+                result.toetspeilen.append(
+                    Toetspeil(
+                        location_id=rec["CODE"],
+                        peil=rec["TOETSPEIL"],
+                        verschil=rec["VERSCHIL"],
+                    )
+                )
+
         except Exception as e:
             raise ValueError(f"Fout bij het lezen van de invoergegevens; '{e}'")
 
@@ -355,6 +396,22 @@ class DAMInput(BaseModel):
             f"Kan location voor surfaceline_id '{surfaceline_id}' niet vinden"
         )
 
+    def get_toetspeilen(self, location_id: str) -> Optional[Toetspeil]:
+        for t in self.toetspeilen:
+            if t.location_id == location_id:
+                return t
+        raise ValueError(
+            f"Kan toetspeilen voor location_id '{location_id}' niet vinden"
+        )
+
+    def get_stijghoogte(self, location_id: str) -> Optional[Stijghoogte]:
+        for s in self.stijghoogtes:
+            if s.location_id == location_id:
+                return s
+        raise ValueError(
+            f"Kan stijghoogte voor location_id '{location_id}' niet vinden"
+        )
+
     def generate_stix_files(self, output_path: Union[str, Path]) -> None:
         Path(output_path).mkdir(parents=True, exist_ok=True)
 
@@ -386,6 +443,8 @@ class DAMInput(BaseModel):
                 slope_layer = self.get_slope_layer(combination.surfaceline_id)
                 location = self.get_location(surfaceline.id)
                 polderpeilen = self.get_polderpeilen(location.id)
+                toetspeil = self.get_toetspeilen(location.id)
+                stijghoogte = self.get_stijghoogte(location.id)
             except Exception as e:
                 logging.error(
                     f"Fout bij het afhandelen van '{combination.soilgeometry2D_name}'; '{e}'"
@@ -410,6 +469,15 @@ class DAMInput(BaseModel):
             flog.write("------------\n")
             flog.write(f"Minimaal  : {polderpeilen.min_peil:5.2f} [m]\n")
             flog.write(f"Maximaal  : {polderpeilen.max_peil:5.2f} [m]\n")
+            flog.write("------------\n")
+            flog.write("TOETSPEIL\n")
+            flog.write("---------\n")
+            flog.write(f"Toetspeil : {toetspeil.peil:5.2f} [m]\n")
+            flog.write(f"Verschil  : {toetspeil.verschil:5.2f} [m]\n")
+            flog.write("-----------\n")
+            flog.write("STIJGHOOGTE\n")
+            flog.write("-----------\n")
+            flog.write(f"Stijghoogte : {stijghoogte.hoogte:5.2f} [m]\n")
             flog.write("-----------------------\n")
             flog.write("GRONDSOORTEN PARAMETERS\n")
             flog.write("-----------------------\n")
