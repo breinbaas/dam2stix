@@ -516,6 +516,8 @@ class DAMInput(BaseModel):
                 flog.write(
                     f"Xinsteekberm  : {surfaceline.x_insteek_binnenberm:5.2f} [m]\n"
                 )
+            else:
+                flog.write("Xinsteekberm  : Geen berm gevonden\n")
             flog.write(f"Xbinnenteen   : {surfaceline.x_binnenteen:5.2f} [m]\n")
 
             flog.write("------------\n")
@@ -569,23 +571,27 @@ class DAMInput(BaseModel):
                 )
 
             # add phreatic line
+            # x meest linkerpunt met z op toetspeil
             plpoints = [(levee.left, toetspeil.peil)]
+            # x op buitenkruin, z op toetspeil
             plpoints.append(
                 (surfaceline.x_buitenkruin, toetspeil.peil)
             )  # TODO, offset mogelijk
+            # x op binnenkruin, z op toetspeil minus verschil
             plpoints.append(
                 (surfaceline.x_binnenkruin, toetspeil.peil - toetspeil.verschil)
             )
-            if surfaceline.has_berm:  # TODO implement
+            # TODO overleg over dit punt
+            # als er een berm is
+            if surfaceline.has_berm:
+                # x op insteek binnenberm, z op polderpeil (minimaal peil)
                 plpoints.append(
                     (surfaceline.x_insteek_binnenberm, polderpeilen.min_peil)
-                )  # TODO polderpeilen.min_peil?
-            plpoints.append(
-                (surfaceline.x_binnenteen, polderpeilen.min_peil)
-            )  # TODO polderpeilen.min_peil?
-            plpoints.append(
-                (levee.right, polderpeilen.min_peil)
-            )  # TODO polderpeilen.min_peil?
+                )
+            # x op binnenteen, z op polderpeil (minimaal peil)
+            plpoints.append((surfaceline.x_binnenteen, polderpeilen.min_peil))
+            # x meest rechter punt, z op polderpeil (minimaal peil)
+            plpoints.append((levee.right, polderpeilen.min_peil))
             levee.add_phreatic_line(points=plpoints)
 
             areas = {s: 0.0 for s in soilnames}
