@@ -81,6 +81,17 @@ Waarbij 'CODE' overeenkomt met de location id.
 
 **NB** de benaming van de velden is overgenomen uit de eerste levering van de shapebestanden ten tijde van het schrijven van deze scripts.
 
+## Freatische lijn logica
+
+De volgende afbeelding toont de logica van de opbouw van de freatische lijn;
+
+![freatische lijn bepaling](img/freatischelijn.png)
+
+De offset tov het maaiveld wordt in de code in de constante ```Z_PHREATIC_OFFSET_MAAIVELD``` vastgesteld.
+
+De offset tov de buitenkruin wordt in de code bepaald door ```Z_OFFSET_BUITENKRUIN```, **Let op dat deze waarde kleiner moet zijn dan ```verschil``` in de DAM invoer anders loopt de freatische lijn omhoog** en daarbij wordt een Exception gegenereerd. Deze kan eventueel verwijderd worden als dit wel toegestaan wordt.
+
+Indien er geen sloot is gevonden wordt over de hele geometrie een waterlijn aangehouden met een afstand tussen het maaiveld conform ```Z_PHREATIC_OFFSET_MAAIVELD``` waarbij het volgende punt niet hoger mag liggen dan het voorgaande punt. Indien er wel een sloot aanwezig is wordt na de insteek sloot dijkzijde het polderpeil aangehouden ongeacht de ligging van het maaiveld.
 
 ## Uitvoer
 
