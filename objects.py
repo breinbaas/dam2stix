@@ -16,9 +16,30 @@ from leveelogic.objects.soilprofile import (
 )
 from leveelogic.objects.soil import Soil as LLSoil
 from leveelogic.objects.crosssection import Crosssection as LLCrosssection
+from leveelogic.helpers import polyline_polyline_intersections
 
 
 X_UNDEFINED = -9999
+
+# de freatische lijn raakt de dijk, dit wordt het tweede punt van de freatische lijn
+# de volgende offset bepaalt de afstand tussen het toetspeil en de z coordinaat
+# van het derde punt dat komt te liggen op (x_buitenkruin, toetspeil - Z_OFFSET_BUITENKRUIN)
+# Let op dat het vierde punt op toetspeil - verschil (uit DAM invoer) komt te liggen
+# dus deze waarde moet groter zijn dan Z_OFFSET_BUITENKRUIN anders loopt de freatische lijn weer omhoog
+Z_OFFSET_BUITENKRUIN = 0.0
+# Hou altijd de volgende afstand tussen maaiveld en de freatische lijn
+Z_PHREATIC_OFFSET_MAAIVELD = 0.1
+
+
+def z_at(x: float, points: List[Tuple[float, float]]) -> Optional[float]:
+    for i in range(1, len(points)):
+        p1 = points[i - 1]
+        p2 = points[i]
+
+        if p1[0] <= x and x <= p2[0]:
+            return p1[1] + (x - p1[0]) / (p2[0] - p1[0]) * (p2[1] - p1[1])
+
+    return None
 
 
 class CSVBasedObect(BaseModel):
@@ -138,10 +159,16 @@ class SurfaceLine(BaseModel):
     x_binnenteen: float = X_UNDEFINED
     x_buitenteen: float = X_UNDEFINED
     x_insteek_binnenberm: float = X_UNDEFINED
+    x_insteek_sloot_dijkzijde: float = X_UNDEFINED
+    x_insteek_sloot_polderzijde: float = X_UNDEFINED
 
     @property
     def has_berm(self) -> bool:
         return self.x_insteek_binnenberm != X_UNDEFINED
+
+    @property
+    def has_sloot(self) -> bool:
+        return self.x_insteek_sloot_dijkzijde != X_UNDEFINED
 
 
 class Segment(BaseModel):
@@ -306,20 +333,29 @@ class DAMInput(BaseModel):
         #############################
         for d in charpoints.data:
             location_id = d[charpoints.column_index("LOCATIONID")]
-            x_binnenkruin = float(d[charpoints.column_index("X_Kruin_binnentalud")])
-            x_buitenkruin = float(d[charpoints.column_index("X_Kruin_buitentalud")])
-            x_binnenteen = float(d[charpoints.column_index("X_Teen_dijk_binnenwaarts")])
             x_buitenteen = float(d[charpoints.column_index("X_Teen_dijk_buitenwaarts")])
+            x_buitenkruin = float(d[charpoints.column_index("X_Kruin_buitentalud")])
+            x_binnenkruin = float(d[charpoints.column_index("X_Kruin_binnentalud")])
+            x_binnenteen = float(d[charpoints.column_index("X_Teen_dijk_binnenwaarts")])
             x_insteek_binnenberm = float(
                 d[charpoints.column_index("X_Insteek_binnenberm")]
             )
+            x_insteek_sloot_dijkzijde = float(
+                d[charpoints.column_index("X_Insteek_sloot_dijkzijde")]
+            )
+            x_insteek_sloot_polderzijde = float(
+                d[charpoints.column_index("X_Insteek_sloot_polderzijde")]
+            )
+
             result.add_charpoints(
-                location_id,
-                x_binnenkruin,
-                x_binnenteen,
-                x_buitenteen,
-                x_buitenkruin,
-                x_insteek_binnenberm,
+                location_id=location_id,
+                x_buitenteen=x_buitenteen,
+                x_buitenkruin=x_buitenkruin,
+                x_binnenkruin=x_binnenkruin,
+                x_binnenteen=x_binnenteen,
+                x_insteek_binnenberm=x_insteek_binnenberm,
+                x_insteek_sloot_dijkzijde=x_insteek_sloot_dijkzijde,
+                x_insteek_sloot_polderzijde=x_insteek_sloot_polderzijde,
             )
 
         ###################
@@ -358,11 +394,13 @@ class DAMInput(BaseModel):
     def add_charpoints(
         self,
         location_id: str,
-        x_binnenkruin: float,
-        x_binnenteen: float,
         x_buitenteen: float,
         x_buitenkruin: float,
+        x_binnenkruin: float,
         x_insteek_binnenberm: float,
+        x_binnenteen: float,
+        x_insteek_sloot_dijkzijde: float,
+        x_insteek_sloot_polderzijde: float,
     ) -> None:
         for i in range(len(self.surfacelines)):
             if self.surfacelines[i].id == location_id:
@@ -372,6 +410,14 @@ class DAMInput(BaseModel):
                 self.surfacelines[i].x_buitenkruin = x_buitenkruin
                 if x_insteek_binnenberm != -1.0:
                     self.surfacelines[i].x_insteek_binnenberm = x_insteek_binnenberm
+                if x_insteek_sloot_dijkzijde != -1.0:
+                    self.surfacelines[i].x_insteek_sloot_dijkzijde = (
+                        x_insteek_sloot_dijkzijde
+                    )
+                if x_insteek_sloot_polderzijde != -1.0:
+                    self.surfacelines[i].x_insteek_sloot_polderzijde = (
+                        x_insteek_sloot_polderzijde
+                    )
                 return
 
         raise ValueError(
@@ -509,16 +555,32 @@ class DAMInput(BaseModel):
             flog.write("----------------------\n")
             flog.write("KARAKTERISTIEKE PUNTEN\n")
             flog.write("----------------------\n")
-            flog.write(f"Xbuitenteen   : {surfaceline.x_buitenteen:5.2f} [m]\n")
-            flog.write(f"Xbuitenkruin  : {surfaceline.x_buitenkruin:5.2f} [m]\n")
-            flog.write(f"Xbinnenkruin  : {surfaceline.x_binnenkruin:5.2f} [m]\n")
+            flog.write(
+                f"Xbuitenteen                : {surfaceline.x_buitenteen:5.2f} [m]\n"
+            )
+            flog.write(
+                f"Xbuitenkruin               : {surfaceline.x_buitenkruin:5.2f} [m]\n"
+            )
+            flog.write(
+                f"Xbinnenkruin               : {surfaceline.x_binnenkruin:5.2f} [m]\n"
+            )
             if surfaceline.has_berm:
                 flog.write(
-                    f"Xinsteekberm  : {surfaceline.x_insteek_binnenberm:5.2f} [m]\n"
+                    f"Xinsteekberm               : {surfaceline.x_insteek_binnenberm:5.2f} [m]\n"
                 )
             else:
-                flog.write("Xinsteekberm  : Geen berm gevonden\n")
-            flog.write(f"Xbinnenteen   : {surfaceline.x_binnenteen:5.2f} [m]\n")
+                flog.write("Xinsteekberm               : Geen berm gevonden\n")
+            flog.write(
+                f"Xbinnenteen                : {surfaceline.x_binnenteen:5.2f} [m]\n"
+            )
+            if surfaceline.has_sloot:
+                flog.write(
+                    f"Xinsteek_sloot_dijkzijde   : {surfaceline.x_insteek_sloot_dijkzijde:5.2f} [m]\n"
+                )
+                if surfaceline.x_insteek_sloot_dijkzijde is not X_UNDEFINED:
+                    flog.write(
+                        f"Xinsteek_sloot_polderzijde : {surfaceline.x_insteek_sloot_polderzijde:5.2f} [m]\n"
+                    )
 
             flog.write("------------\n")
             flog.write("DEKLAAG KLEI\n")
@@ -570,29 +632,98 @@ class DAMInput(BaseModel):
                     soilcode="ophoogmateriaal_klei",
                 )
 
-            # add phreatic line
-            # x meest linkerpunt met z op toetspeil
-            plpoints = [(levee.left, toetspeil.peil)]
-            # x op buitenkruin, z op toetspeil
-            plpoints.append(
-                (surfaceline.x_buitenkruin, toetspeil.peil)
-            )  # TODO, offset mogelijk
-            # x op binnenkruin, z op toetspeil minus verschil
-            plpoints.append(
-                (surfaceline.x_binnenkruin, toetspeil.peil - toetspeil.verschil)
+            # P1 (links, toetspeil)
+            p1 = [levee.left, toetspeil.peil]
+
+            # P2 (eerste snijpunt met de dijk, toetspeil)
+            intersections = levee.get_surface_intersections(
+                points=[p1, (surfaceline.x_buitenkruin, toetspeil.peil)]
             )
-            # TODO overleg over dit punt
-            # als er een berm is
-            if surfaceline.has_berm:
-                # x op insteek binnenberm, z op polderpeil (minimaal peil)
-                plpoints.append(
-                    (surfaceline.x_insteek_binnenberm, polderpeilen.min_peil)
+            if len(intersections) == 0:
+                raise ValueError(
+                    "Kan geen snijpunt op het toetspeil met de dijk vinden tussen de linker limiet en de buitenkruin van dit profiel"
                 )
-            # x op binnenteen, z op polderpeil (minimaal peil)
-            plpoints.append((surfaceline.x_binnenteen, polderpeilen.min_peil))
-            # x meest rechter punt, z op polderpeil (minimaal peil)
-            plpoints.append((levee.right, polderpeilen.min_peil))
-            levee.add_phreatic_line(points=plpoints)
+            p2 = [intersections[0][0], toetspeil.peil]
+
+            # P3 (buitenkruin, toetspeil minus Z_OFFSET_BUITENKRUIN) # let op dat Z_OFFSET_BUITENKRUIN < toetspeil.verschil!
+            p3 = [surfaceline.x_buitenkruin, p2[1] - Z_OFFSET_BUITENKRUIN]
+
+            # P4 = (binnenkruin, toetspeil - verschil)
+            p4 = [surfaceline.x_binnenkruin, p2[1] - toetspeil.verschil]
+            if p3[1] < p4[1]:
+                raise ValueError(
+                    "De z coordinaat van punt 3 is lager dan die van punt 4, dit kan gebeuren als `Z_OFFSET_BUITENKRUIN` groter is dan `verschil` in de DAM invoer"
+                )
+
+            # P5 = OPTIONEEL (insteek binnenberm, maaiveld - Z_PHREATIC_OFFSET_MAAIVELD)
+            if surfaceline.x_insteek_binnenberm == X_UNDEFINED:
+                p5 = []
+            else:
+                p5 = [
+                    surfaceline.x_insteek_binnenberm,
+                    levee.z_at(surfaceline.x_insteek_binnenberm)
+                    - Z_PHREATIC_OFFSET_MAAIVELD,
+                ]
+
+            # P6 = (binnenteen, maaiveld - Z_PHREATIC_OFFSET_MAAIVELD)
+            p6 = [
+                surfaceline.x_binnenteen,
+                levee.z_at(surfaceline.x_binnenteen) - Z_PHREATIC_OFFSET_MAAIVELD,
+            ]
+
+            # OPTIONEEL P7 = (insteek sloot polderzijde, polderpeil max peil)
+            # P8 indien sloot (rechter limiet, polderpeil max peil)
+            # P8 geen sloot (rechter limiet, maaiveld - Z_PHREATIC_OFFSET_MAAIVELD)
+            if surfaceline.has_sloot:
+                p7 = [surfaceline.x_insteek_sloot_dijkzijde, polderpeilen.min_peil]
+                p8 = [levee.right, polderpeilen.min_peil]
+            else:
+                p7 = []
+                p8 = [levee.right, levee.z_at(levee.right) - Z_PHREATIC_OFFSET_MAAIVELD]
+
+            # genereer de punten en discard de lege punten
+            pl_points = [p for p in [p1, p2, p3, p4, p5, p6, p7, p8] if len(p) != 0]
+
+            if surfaceline.x_insteek_binnenberm != X_UNDEFINED:
+                xl = surfaceline.x_insteek_binnenberm
+            else:
+                xl = surfaceline.x_binnenkruin
+
+            if surfaceline.has_sloot:
+                xr = surfaceline.x_insteek_sloot_dijkzijde
+            else:
+                xr = levee.right
+
+            xs = [p[0] for p in levee.surface if p[0] > xl and p[0] <= xr]
+            xs += [p[0] for p in pl_points if p[0] > xl and p[0] <= xr]
+            xs = sorted(list(set(xs)))
+
+            # maak de nieuwe pl lijn
+            # voeg eerst de punten tot en met de binnenkruin toe
+            final_pl_points = [
+                p for p in pl_points if p[0] <= surfaceline.x_binnenkruin
+            ]
+
+            # voeg alle punten tussen xl en xr toe en check de hoogte tov mv
+            for x in xs:
+                z_mv = levee.z_at(x)
+                z_pl = z_at(x, pl_points)
+                if z_pl > z_mv - Z_PHREATIC_OFFSET_MAAIVELD:
+                    final_pl_points.append([x, z_mv - Z_PHREATIC_OFFSET_MAAIVELD])
+                else:
+                    final_pl_points.append([x, z_pl])
+
+            # als xr != levee.right voeg ook dan nog de oude punten toe
+            if xr != levee.right:
+                final_pl_points += [p for p in pl_points if p[0] > xr]
+
+            # en zorg ervoor dat de punten aflopend zijn
+            for i in range(1, len(final_pl_points)):
+                if final_pl_points[i - 1][1] < final_pl_points[i][1]:
+                    final_pl_points[i][1] = final_pl_points[i - 1][1]
+
+            # voeg de pl lijn toe
+            levee.add_phreatic_line(points=final_pl_points)
 
             areas = {s: 0.0 for s in soilnames}
             limited_areas = {s: 0.0 for s in soilnames}

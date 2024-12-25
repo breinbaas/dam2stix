@@ -1,2 +1,2 @@
-leveelogic==0.8.10
+leveelogic==0.8.18
 tqdm
