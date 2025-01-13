@@ -30,6 +30,17 @@ Z_OFFSET_BUITENKRUIN = 0.0
 # Hou altijd de volgende afstand tussen maaiveld en de freatische lijn
 Z_PHREATIC_OFFSET_MAAIVELD = 0.1
 
+# De volgende grondsoortnamen worden als klei / veen gezien (ivm bepaling waterspanningsverloop)
+KLEI_VEEN_GRONDSOORTEN = [
+    "Veen > 300",
+    "Veen < 300",
+    "Klei humeus <14",
+    "Klei siltig 14,5-16,5",
+    "Klei zandig >16,5",
+    "Basisveen",
+    "ophoogmateriaal_klei",
+]
+
 
 def z_at(x: float, points: List[Tuple[float, float]]) -> Optional[float]:
     for i in range(1, len(points)):
@@ -490,7 +501,7 @@ class DAMInput(BaseModel):
 
         # let op bij 3d punten -> nu wordt x binnenkruin, binnenteen bepaald via x,z punten bij x,y,z gaat dat fout
 
-        for combination in tqdm(self.combinations):
+        for combination in tqdm(self.combinations[:1]):
             # generate filenames
             stix_filename = (
                 Path(output_path) / f"{combination.soilgeometry2D_name}.stix"
@@ -608,6 +619,31 @@ class DAMInput(BaseModel):
                     for l in polder_soilprofile.layers
                 ]
             )
+
+            # vind de een aan onderste klei- of veenlaag
+            # kruin opbouw
+            idx_vklagen_crest = [
+                i
+                for i in range(len(sp_crest.soillayers))
+                if sp_crest.soillayers[i].soilcode in KLEI_VEEN_GRONDSOORTEN
+            ]
+            if len(idx_vklagen_crest) < 2:
+                raise ValueError(
+                    f"Er is geen een aan onderste cohesieve laag gevonden aan de kruin kant. Kan waterspanningsverloop niet bepalen."
+                )
+            z_pl3_crest = sp_crest.soillayers[idx_vklagen_crest[-2]].top
+
+            # teen opbouw
+            idx_vklagen_polder = [
+                i
+                for i in range(len(sp_polder.soillayers))
+                if sp_polder.soillayers[i].soilcode in KLEI_VEEN_GRONDSOORTEN
+            ]
+            if len(idx_vklagen_polder) < 2:
+                raise ValueError(
+                    f"Er is geen een aan onderste cohesieve laag gevonden aan de polder kant. Kan waterspanningsverloop niet bepalen."
+                )
+            z_pl3_polder = sp_polder.soillayers[idx_vklagen_polder[-2]].top
 
             crosssection = LLCrosssection(
                 points=[p.as_2d() for p in surfaceline.points]
@@ -753,6 +789,25 @@ class DAMInput(BaseModel):
 
             # voeg de pl lijn toe
             levee.add_phreatic_line(points=final_pl_points)
+
+            # voeg de stijghoogte toe
+            pl3_points = [
+                (levee.left, stijghoogte.hoogte),
+                (levee.right, stijghoogte.hoogte),
+            ]
+            levee.add_headline(id="PL3", points=pl3_points)
+
+            # maak de referentielijn voor de overgang pl -> interpolatie
+            ref_line_top = [
+                (levee.left, z_pl3_crest),
+                (surfaceline.x_binnenteen, z_pl3_crest),
+                (surfaceline.x_binnenteen, z_pl3_polder),
+                (levee.right, z_pl3_polder),
+            ]
+            levee.add_head_reference_line(
+                ref_line_top,
+                headline_above_id="PL1",
+            )
 
             areas = {s: 0.0 for s in soilnames}
             limited_areas = {s: 0.0 for s in soilnames}
