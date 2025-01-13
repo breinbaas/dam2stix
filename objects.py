@@ -589,8 +589,6 @@ class DAMInput(BaseModel):
                 f"Kleilaag dikte: {slope_layer.slope_layer_thickness:5.2f} [m]\n"
             )
 
-            flog.close()
-
             ##########################
             # GENERATE THE STIX FILE #
             ##########################
@@ -632,8 +630,12 @@ class DAMInput(BaseModel):
                     soilcode="ophoogmateriaal_klei",
                 )
 
+            flog.write("---------------\n")
+            flog.write("FREATISCHE LIJN\n")
+            flog.write("---------------\n")
             # P1 (links, toetspeil)
             p1 = [levee.left, toetspeil.peil]
+            flog.write(f"P1: ({p1[0]:.2f}, {p1[1]:.2f}) linkerzijde geometrie \n")
 
             # P2 (eerste snijpunt met de dijk, toetspeil)
             intersections = levee.get_surface_intersections(
@@ -644,12 +646,19 @@ class DAMInput(BaseModel):
                     "Kan geen snijpunt op het toetspeil met de dijk vinden tussen de linker limiet en de buitenkruin van dit profiel"
                 )
             p2 = [intersections[0][0], toetspeil.peil]
+            flog.write(f"P2: ({p2[0]:.2f}, {p2[1]:.2f}) snijpunt met de dijk\n")
 
             # P3 (buitenkruin, toetspeil minus Z_OFFSET_BUITENKRUIN) # let op dat Z_OFFSET_BUITENKRUIN < toetspeil.verschil!
             p3 = [surfaceline.x_buitenkruin, p2[1] - Z_OFFSET_BUITENKRUIN]
+            flog.write(
+                f"P3; ({p3[0]:.2f}, {p3[1]:.2f}) buitenkruin (toetspeil minus offset buitenkruin)\n"
+            )
 
             # P4 = (binnenkruin, toetspeil - verschil)
             p4 = [surfaceline.x_binnenkruin, p2[1] - toetspeil.verschil]
+            flog.write(
+                f"P4; ({p4[0]:.2f}, {p4[1]:.2f}) binnenkruin (toetspeil minus verschil)\n"
+            )
             if p3[1] < p4[1]:
                 raise ValueError(
                     "De z coordinaat van punt 3 is lager dan die van punt 4, dit kan gebeuren als `Z_OFFSET_BUITENKRUIN` groter is dan `verschil` in de DAM invoer"
@@ -658,18 +667,23 @@ class DAMInput(BaseModel):
             # P5 = OPTIONEEL (insteek binnenberm, maaiveld - Z_PHREATIC_OFFSET_MAAIVELD)
             if surfaceline.x_insteek_binnenberm == X_UNDEFINED:
                 p5 = []
+                flog.write(f"P5; Geen insteek berm dus geen P5\n")
             else:
                 p5 = [
                     surfaceline.x_insteek_binnenberm,
                     levee.z_at(surfaceline.x_insteek_binnenberm)
                     - Z_PHREATIC_OFFSET_MAAIVELD,
                 ]
+                flog.write(
+                    f"P5; ({p5[0]:.2f}, {p5[1]:.2f}) insteek binnenberm - maaiveld offset\n"
+                )
 
             # P6 = (binnenteen, maaiveld - Z_PHREATIC_OFFSET_MAAIVELD)
             p6 = [
                 surfaceline.x_binnenteen,
                 levee.z_at(surfaceline.x_binnenteen) - Z_PHREATIC_OFFSET_MAAIVELD,
             ]
+            flog.write(f"P6; ({p6[0]:.2f}, {p6[1]:.2f}) binnenteen - maaiveld offset\n")
 
             # OPTIONEEL P7 = (insteek sloot polderzijde, polderpeil max peil)
             # P8 indien sloot (rechter limiet, polderpeil max peil)
@@ -677,41 +691,56 @@ class DAMInput(BaseModel):
             if surfaceline.has_sloot:
                 p7 = [surfaceline.x_insteek_sloot_dijkzijde, polderpeilen.min_peil]
                 p8 = [levee.right, polderpeilen.min_peil]
+                flog.write(
+                    f"P7; ({p7[0]:.2f}, {p7[1]:.2f}) insteek sloot polderzijde, max polderpeil\n"
+                )
+                flog.write(
+                    f"P8; ({p8[0]:.2f}, {p8[1]:.2f}) rechter limiet, maaiveld minus maaiveld offset\n"
+                )
             else:
                 p7 = []
                 p8 = [levee.right, levee.z_at(levee.right) - Z_PHREATIC_OFFSET_MAAIVELD]
+                flog.write(f"P7; Geen sloot dus geen P7\n")
+                flog.write(
+                    f"P8; ({p8[0]:.2f}, {p8[1]:.2f}) rechter limiet, maaiveld minus maaiveld offset\n"
+                )
 
             # genereer de punten en discard de lege punten
             pl_points = [p for p in [p1, p2, p3, p4, p5, p6, p7, p8] if len(p) != 0]
 
-            if surfaceline.x_insteek_binnenberm != X_UNDEFINED:
-                xl = surfaceline.x_insteek_binnenberm
-            else:
-                xl = surfaceline.x_binnenkruin
+            # vanaf de binnenkruin moeten we controleren of de punten niet boven het maaiveld (minus offset) uitkomen
+            # en of de punten niet oplopen
+            xl = surfaceline.x_binnenkruin
+            # deze controle doen we tot de sloot insteek of als deze er niet is tot het einde van de geometrie
+            xr = (
+                levee.right
+                if not surfaceline.has_sloot
+                else surfaceline.x_insteek_sloot_dijkzijde
+            )
 
-            if surfaceline.has_sloot:
-                xr = surfaceline.x_insteek_sloot_dijkzijde
-            else:
-                xr = levee.right
-
+            # bepaal alle x coordinaten van het maaiveld tussen xl en xr
             xs = [p[0] for p in levee.surface if p[0] > xl and p[0] <= xr]
+            # en voeg de pl coordinaten toe
             xs += [p[0] for p in pl_points if p[0] > xl and p[0] <= xr]
+            # verwijder dubbelingen
             xs = sorted(list(set(xs)))
+
+            # bepaal de z coordinaten op basis van de initiele freatische lijn
+            zpl = [z_at(x, pl_points) for x in xs]
+            zmv = [z_at(x, levee.surface) for x in xs]
+
+            # check of ze boven het maaiveld uitkomen en zo ja dan verplaatsen naar maaiveld - offset
+            for i in range(len(zpl)):
+                if zpl[i] > zmv[i] - Z_PHREATIC_OFFSET_MAAIVELD:
+                    zpl[i] = zmv[i] - Z_PHREATIC_OFFSET_MAAIVELD
 
             # maak de nieuwe pl lijn
             # voeg eerst de punten tot en met de binnenkruin toe
-            final_pl_points = [
-                p for p in pl_points if p[0] <= surfaceline.x_binnenkruin
-            ]
+            final_pl_points = [p for p in pl_points if p[0] <= xl]
 
             # voeg alle punten tussen xl en xr toe en check de hoogte tov mv
-            for x in xs:
-                z_mv = levee.z_at(x)
-                z_pl = z_at(x, pl_points)
-                if z_pl > z_mv - Z_PHREATIC_OFFSET_MAAIVELD:
-                    final_pl_points.append([x, z_mv - Z_PHREATIC_OFFSET_MAAIVELD])
-                else:
-                    final_pl_points.append([x, z_pl])
+            for x, z in zip(xs, zpl):
+                final_pl_points.append([x, z])
 
             # als xr != levee.right voeg ook dan nog de oude punten toe
             if xr != levee.right:
@@ -782,6 +811,7 @@ class DAMInput(BaseModel):
             limited_area_file.write(s_limited)
 
             levee.to_stix(stix_filename)
+            flog.close()
 
         area_file.close()
         limited_area_file.close()
