@@ -2,7 +2,6 @@ from pydantic import BaseModel
 from typing import List, Optional, Union, Tuple, Dict
 from pathlib import Path
 import logging
-from enum import IntEnum
 from tqdm import tqdm
 from math import hypot
 import shapefile
@@ -31,6 +30,7 @@ Z_OFFSET_BUITENKRUIN = 0.0
 Z_PHREATIC_OFFSET_MAAIVELD = 0.1
 
 # De volgende grondsoortnamen worden als klei / veen gezien (ivm bepaling waterspanningsverloop)
+# Alle overige grondsoorten worden als zand (doorlatend) gezien
 KLEI_VEEN_GRONDSOORTEN = [
     "Veen > 300",
     "Veen < 300",
@@ -501,7 +501,8 @@ class DAMInput(BaseModel):
 
         # let op bij 3d punten -> nu wordt x binnenkruin, binnenteen bepaald via x,z punten bij x,y,z gaat dat fout
 
-        for combination in tqdm(self.combinations[:1]):
+        for combination in tqdm(self.combinations):
+            logging.info(f"Handling '{combination.soilgeometry2D_name}'")
             # generate filenames
             stix_filename = (
                 Path(output_path) / f"{combination.soilgeometry2D_name}.stix"
@@ -620,18 +621,27 @@ class DAMInput(BaseModel):
                 ]
             )
 
-            # vind de een aan onderste klei- of veenlaag
+            # VIND DE EEN AAN ONDERSTE COHESIEVE LAAG
             # kruin opbouw
+            cohesive_layers_found = True  # hebben we een laag om over te interpoleren?
+            z_pl3_crest = None  # z coordinaat van de bovenzijde van de een aan onderste cohesieve laag aan de kruin kant
+            z_pl3_polder = None  # z coordinaat van de bovenzijde van de een aan onderste cohesieve laag aan de polder kant
+            z_rl3_crest = None  # z coordinaat van de onderzijde van laagste cohesieve laag aan de kruin kant
+            z_rl3_polder = None  # z coordinaat van de onderzijde van laagste cohesieve laag aan de polder kant
+
             idx_vklagen_crest = [
                 i
                 for i in range(len(sp_crest.soillayers))
                 if sp_crest.soillayers[i].soilcode in KLEI_VEEN_GRONDSOORTEN
             ]
             if len(idx_vklagen_crest) < 2:
-                raise ValueError(
-                    f"Er is geen een aan onderste cohesieve laag gevonden aan de kruin kant. Kan waterspanningsverloop niet bepalen."
+                cohesive_layers_found = False
+                logging.warning(
+                    f"Er is geen een aan onderste cohesieve laag gevonden aan de kruin kant. Kan geen PL1 / PL3 verloop toevoegen."
                 )
-            z_pl3_crest = sp_crest.soillayers[idx_vklagen_crest[-2]].top
+            else:
+                z_pl3_crest = sp_crest.soillayers[idx_vklagen_crest[-2]].top
+                z_rl3_crest = sp_crest.soillayers[idx_vklagen_crest[-1]].bottom
 
             # teen opbouw
             idx_vklagen_polder = [
@@ -640,10 +650,15 @@ class DAMInput(BaseModel):
                 if sp_polder.soillayers[i].soilcode in KLEI_VEEN_GRONDSOORTEN
             ]
             if len(idx_vklagen_polder) < 2:
-                raise ValueError(
-                    f"Er is geen een aan onderste cohesieve laag gevonden aan de polder kant. Kan waterspanningsverloop niet bepalen."
+                cohesive_layers_found = False
+                logging.warning(
+                    f"Er is geen een aan onderste cohesieve laag gevonden aan de polder kant. Kan geen PL1 / PL3 verloop toevoegen."
                 )
-            z_pl3_polder = sp_polder.soillayers[idx_vklagen_polder[-2]].top
+            else:
+                z_pl3_polder = sp_polder.soillayers[idx_vklagen_polder[-2]].top
+                z_rl3_polder = sp_polder.soillayers[idx_vklagen_polder[-1]].bottom
+
+            # VIND DE HOOGSTE ZANDLAAG VANAF DE ONDERZIJDE
 
             crosssection = LLCrosssection(
                 points=[p.as_2d() for p in surfaceline.points]
@@ -791,23 +806,36 @@ class DAMInput(BaseModel):
             levee.add_phreatic_line(points=final_pl_points)
 
             # voeg de stijghoogte toe
-            pl3_points = [
-                (levee.left, stijghoogte.hoogte),
-                (levee.right, stijghoogte.hoogte),
-            ]
-            levee.add_headline(id="PL3", points=pl3_points)
+            if cohesive_layers_found:
+                pl3_points = [
+                    (levee.left, stijghoogte.hoogte),
+                    (levee.right, stijghoogte.hoogte),
+                ]
+                levee.add_headline(id="PL3", points=pl3_points)
 
-            # maak de referentielijn voor de overgang pl -> interpolatie
-            ref_line_top = [
-                (levee.left, z_pl3_crest),
-                (surfaceline.x_binnenteen, z_pl3_crest),
-                (surfaceline.x_binnenteen, z_pl3_polder),
-                (levee.right, z_pl3_polder),
-            ]
-            levee.add_head_reference_line(
-                ref_line_top,
-                headline_above_id="PL1",
-            )
+                # maak de referentielijn voor de overgang pl -> interpolatie
+                ref_line_top = [
+                    (levee.left, z_pl3_crest),
+                    (surfaceline.x_binnenteen, z_pl3_crest),
+                    (surfaceline.x_binnenteen, z_pl3_polder),
+                    (levee.right, z_pl3_polder),
+                ]
+                levee.add_head_reference_line(
+                    ref_line_top,
+                    headline_above_id="PL1",
+                )
+
+                # maak de referentielijn voor overgang PL3 -> interpolatie
+                ref_line_bottom = [
+                    (levee.left, z_rl3_crest),
+                    (surfaceline.x_binnenteen, z_rl3_crest),
+                    (surfaceline.x_binnenteen, z_rl3_polder),
+                    (levee.right, z_rl3_polder),
+                ]
+                levee.add_head_reference_line(
+                    ref_line_bottom,
+                    headline_below_id="PL3",
+                )
 
             areas = {s: 0.0 for s in soilnames}
             limited_areas = {s: 0.0 for s in soilnames}
